@@ -1,0 +1,97 @@
+services:
+
+  # --------------------
+  # -- PGAdmin4 --
+  # --------------------
+  pgadmin:
+    restart: unless-stopped
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: genbrdb@genbrdb.br
+      PGADMIN_DEFAULT_PASSWORD: genbrdb123
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+
+  # --------------------
+  # -- PostgreSQL --
+  # --------------------
+
+  pgsql18:
+    image: postgres:18
+    container_name: postgres-v18-container
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: genbrdb123
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      # Caminho atualizado para compatibilidade com o Postgres 18
+      - postgres_v18_data:/var/lib/postgresql/18/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U meu_usuario -d meu_banco_de_dados" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --------------------
+  # -- yugabytedb --
+  # --------------------
+  yugabyte:
+    image: yugabytedb/yugabyte:latest
+    container_name: yugabyte-node
+    hostname: yugabyte-node
+    user: root  # Mantém a correção para o erro de permissão (Erro 13)
+    ports:
+      - "7000:7000"   # Master UI
+      - "9000:9000"   # TServer UI
+      - "15433:15433" # yugabyted UI
+      - "5433:5433"   # Porta do YSQL (PostgreSQL)
+    environment:
+      - YSQL_PASSWORD=genbrdb123  # <--- Define a senha do usuário padrão aqui
+    volumes:
+      - yb-data:/home/yugabyte/yb_data
+    command: >
+      bin/yugabyted start 
+      --base_dir=/home/yugabyte/yb_data 
+      --background=false
+    restart: unless-stopped
+
+  # --------------------
+  # -- RabbitMQ --
+  # --------------------
+  rabbitmq:
+    image: rabbitmq:latest
+    container_name: rabbitmq
+    restart: unless-stopped
+    ports:
+      - 5672:5672
+      - 15672:15672
+    environment:
+      RABBITMQ_DEFAULT_USER: genbrdb
+      RABBITMQ_DEFAULT_PASS: genbrdb123
+    configs:
+      - source: rabbitmq-plugins
+        target: /etc/rabbitmq/enabled_plugins
+    volumes:
+      - rabbitmq-lib:/var/lib/rabbitmq/
+      - rabbitmq-log:/var/log/rabbitmq
+
+configs:
+  rabbitmq-plugins:
+    content: "[rabbitmq_management]."
+
+volumes:
+  pgadmin-data:
+  yb-data:
+    driver: local
+  rabbitmq-lib:
+    driver: local
+  rabbitmq-log:
+    driver: local
+  postgres_v18_data:
+    driver: local
